@@ -19,13 +19,7 @@ export default defineConfig({
   timeout: 60000, //whole test (including hooks in that test) must finish in 60 seconds
   expect: { timeout: 10000, }, //each expect statement must finish in 10 seconds
   /* Reporter to use. See https://playwright.dev/docs/test-reporters */
-  reporter: [
-    ['html', { outputFolder: 'reports/html', open: 'never' }],
-    ['list'],
-    ...(process.env.USE_ALLURE === 'true'
-      ? ([['allure-playwright', { resultsDir: 'reports/allure-results' }]] as const)
-      : []),
-  ],
+  reporter: [['html']],
   /* Shared settings for all the projects below. See https://playwright.dev/docs/api/class-testoptions. */
   use: {
     /* Base URL to use in actions like `await page.goto('')`. */
