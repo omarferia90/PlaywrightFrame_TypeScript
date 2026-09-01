@@ -1,7 +1,6 @@
 import { defineConfig, devices } from '@playwright/test';
-import dotenv from 'dotenv';
+import { activeEnvironment } from './src/config/environments';
 
-dotenv.config();
 
 /**
  * See https://playwright.dev/docs/test-configuration.
@@ -23,7 +22,7 @@ export default defineConfig({
   /* Shared settings for all the projects below. See https://playwright.dev/docs/api/class-testoptions. */
   use: {
     /* Base URL to use in actions like `await page.goto('')`. */
-    baseURL: process.env.BASE_URL,
+    baseURL: activeEnvironment.baseUrl,
     actionTimeout: 15000,      // click, fill, check, etc in 10 seconds
     navigationTimeout: 30000,  // page.goto, reload, waitForURL in 30 seconds
     trace: 'on-first-retry',

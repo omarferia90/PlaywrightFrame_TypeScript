@@ -4,7 +4,7 @@ import { assertVisible } from '../../utils/logger';
 import { logStep } from '../../utils/decorators';
 
 export class ClaimsSearchPage extends BasePage {
-  readonly url = '/claims/search';
+  readonly url = '/';
 
   private readonly searchInput: Locator;
   private readonly searchButton: Locator;

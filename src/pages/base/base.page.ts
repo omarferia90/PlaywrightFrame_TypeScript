@@ -16,7 +16,4 @@ export abstract class BasePage {
     await this.page.waitForLoadState('networkidle');
   }
 
-  protected locator(selector: string): Locator {
-    return this.page.locator(selector);
-  }
 }
