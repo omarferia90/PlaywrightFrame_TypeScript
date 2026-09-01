@@ -4,16 +4,20 @@
 
 ```
 # .env.example
-BASE_URL=https://qa.example.com
-API_BASE_URL=https://api-qa.example.com
+TEST_ENV=qa
 TEST_USER_EMAIL=qa.user@example.com
 TEST_USER_PASSWORD=changeme
+USE_ALLURE=false
 ```
+
+Credentials stay in `.env` (gitignored). **URLs are not required env vars** in this framework: they come from `src/config/environments.ts` via `TEST_ENV`.
 
 Typed reading, never scattered `process.env.X` calls throughout the code:
 
 ```typescript
 // src/utils/env.ts
+import { activeEnvironment } from '../config/environments';
+
 function required(name: string): string {
   const value = process.env[name];
   if (!value) throw new Error(`Missing required env var: ${name}`);
@@ -21,61 +25,95 @@ function required(name: string): string {
 }
 
 export const env = {
-  baseUrl: required('BASE_URL'),
-  apiBaseUrl: required('API_BASE_URL'),
-  testUser: {
-    email: required('TEST_USER_EMAIL'),
-    password: required('TEST_USER_PASSWORD'),
+  get baseUrl(): string {
+    return activeEnvironment.baseUrl;
   },
-} as const;
+  get apiBaseUrl(): string {
+    return activeEnvironment.apiBaseUrl;
+  },
+  get testUser(): { email: string; password: string } {
+    return {
+      email: required('TEST_USER_EMAIL'),
+      password: required('TEST_USER_PASSWORD'),
+    };
+  },
+};
 ```
 
-`playwright.config.ts` loads `.env` with `dotenv` and uses `env.baseUrl` for `use.baseURL`.
+`src/config/environments.ts` loads `.env` with `dotenv`. `playwright.config.ts` uses `activeEnvironment.baseUrl` for `use.baseURL`.
 
-## Per-environment config (dev/qa/staging)
-
-If the user needs to run against multiple environments (not just QA), use an environment map instead of multiple `.env` files:
+## Per-environment config (UI and API may be different apps)
 
 ```typescript
 // src/config/environments.ts
-type Environment = 'dev' | 'qa' | 'staging';
+import dotenv from 'dotenv';
+
+dotenv.config();
+
+export type Environment = 'uat' | 'demo' | 'dev' | 'qa';
 
 const environments: Record<Environment, { baseUrl: string; apiBaseUrl: string }> = {
-  dev: { baseUrl: 'https://dev.example.com', apiBaseUrl: 'https://api-dev.example.com' },
-  qa: { baseUrl: 'https://qa.example.com', apiBaseUrl: 'https://api-qa.example.com' },
-  staging: { baseUrl: 'https://staging.example.com', apiBaseUrl: 'https://api-staging.example.com' },
+  uat: {
+    baseUrl: 'https://www.saucedemo.com/',
+    apiBaseUrl: 'https://automationexercise.com/',
+  },
+  demo: {
+    baseUrl: 'https://www.saucedemo.com/',
+    apiBaseUrl: 'https://automationexercise.com/',
+  },
+  dev: {
+    baseUrl: 'https://www.saucedemo.com/',
+    apiBaseUrl: 'https://automationexercise.com/',
+  },
+  qa: {
+    baseUrl: 'https://www.saucedemo.com/',
+    apiBaseUrl: 'https://automationexercise.com/',
+  },
 };
 
-const current = (process.env.TEST_ENV as Environment) ?? 'qa';
-export const activeEnvironment = environments[current];
+function resolveEnvironment(): Environment {
+  const key = (process.env.TEST_ENV as Environment | undefined) ?? 'qa';
+  if (!(key in environments)) {
+    throw new Error(
+      `Unknown TEST_ENV "${process.env.TEST_ENV}". Expected one of: ${Object.keys(environments).join(', ')}`,
+    );
+  }
+  return key;
+}
+
+export const activeEnvironment = environments[resolveEnvironment()];
 ```
 
-This way, running against another environment is just `TEST_ENV=staging npx playwright test`, with no code changes and no per-environment `.env` files.
+Running against another named env is `TEST_ENV=uat npx playwright test`. When a real client project replaces the demos, change the URLs in this map — do not hardcode hosts in Page Objects or specs.
 
 ## Typed test data
 
-Never hardcode data inside the `.spec.ts` file. Use `fixtures/data/`:
+Never hardcode data inside the `.spec.ts` file. Use `fixtures/data/` (and `env.testUser` for secrets):
 
 ```typescript
-// src/fixtures/data/claims.data.ts
-export interface ClaimTestData {
-  claimNumber: string;
-  status: 'open' | 'closed' | 'pending';
+// src/fixtures/data/users.data.ts
+export interface LoginTestData {
+  username: string;
+  password: string;
 }
 
-export const validClaim: ClaimTestData = {
-  claimNumber: 'CLM-000123',
-  status: 'open',
+export const standardUser: LoginTestData = {
+  username: 'standard_user',
+  password: 'secret_sauce',
 };
 ```
 
-```typescript
-// tests/ui/claims/claims-search.spec.ts
-import { validClaim } from '../../../src/fixtures/data/claims.data';
+Prefer `env.testUser` when credentials must not live in git. Demo-only users (SauceDemo public accounts) may live in typed data files.
 
-test('searches for an existing claim @smoke', async ({ claimsSearchPage }) => {
-  await claimsSearchPage.searchByClaimNumber(validClaim.claimNumber);
-  await claimsSearchPage.expectClaimVisible(validClaim.claimNumber);
+```typescript
+// tests/ui/auth/login.spec.ts
+import { test } from '../../../src/fixtures/test-fixtures';
+import { standardUser } from '../../../src/fixtures/data/users.data';
+
+test('logs in with a valid user @smoke', async ({ loginPage }) => {
+  await loginPage.goto();
+  await loginPage.login(standardUser.username, standardUser.password);
+  await loginPage.expectLoggedIn();
 });
 ```
 
@@ -83,25 +121,48 @@ test('searches for an existing claim @smoke', async ({ claimsSearchPage }) => {
 
 ```typescript
 // src/fixtures/test-fixtures.ts
-import { test as base } from '@playwright/test';
-import { ClaimsSearchPage } from '../pages/claims/claims-search.page';
-import { ClaimsApi } from '../api/claims/claims.api';
+import { test as base, type TestInfo } from '@playwright/test';
+import { LoginPage } from '../pages/auth/login.page';
+import { ProductsApi } from '../api/products/products.api';
 
 type Fixtures = {
-  claimsSearchPage: ClaimsSearchPage;
-  claimsApi: ClaimsApi;
+  testInfo: TestInfo;
+  loginPage: LoginPage;
+  productsApi: ProductsApi;
 };
 
 export const test = base.extend<Fixtures>({
-  claimsSearchPage: async ({ page }, use) => {
-    await use(new ClaimsSearchPage(page));
+  page: async ({ page, context }, use) => {
+    try {
+      await use(page);
+    } finally {
+      if (!page.isClosed()) {
+        await page.close();
+      }
+      await context.close();
+    }
   },
-  claimsApi: async ({ request }, use) => {
-    await use(new ClaimsApi(request));
+  browser: [
+    async ({ browser }, use) => {
+      await use(browser);
+      await browser.close();
+    },
+    { scope: 'worker' },
+  ],
+  testInfo: [async ({}, use, testInfo) => {
+    await use(testInfo);
+  }, { auto: true }],
+  loginPage: async ({ page }, use) => {
+    await use(new LoginPage(page));
+  },
+  productsApi: async ({ request }, use) => {
+    await use(new ProductsApi(request));
   },
 });
 
 export { expect } from '@playwright/test';
 ```
 
-Tests import `test`/`expect` from this file (not directly from `@playwright/test`), so they receive already-instantiated Page Objects/API clients without scattered `new` calls in every test.
+Tests import `test`/`expect` from this file (not directly from `@playwright/test`), so they receive already-instantiated Page Objects/API clients without scattered `new` calls in every test. When adding a page or API client, extend this file.
+
+The `page` / `browser` overrides close the headed window after the test/worker. Keep that behavior when editing fixtures unless the user asks otherwise.

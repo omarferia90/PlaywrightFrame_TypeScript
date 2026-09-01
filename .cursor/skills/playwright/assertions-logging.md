@@ -6,10 +6,10 @@ This is the **mandatory** pattern for any visible verification in the tests. It 
 
 ```typescript
 // ❌ Don't use this pattern anymore
-await expect(claimRow, `Claim row with number ${claimNumber} should be visible`).toBeVisible();
-let isCond = await claimRow.isVisible();
+await expect(heading, 'Products heading should be visible').toBeVisible();
+let isCond = await heading.isVisible();
 let ctrlIcon = isCond ? '✅' : '❌';
-console.log(`[Search] ${ctrlIcon} Claim row for "${claimNumber}" ...`);
+console.log(`[Login] ${ctrlIcon} Products heading ...`);
 ```
 
 Problem: if the `expect` fails, the test stops right there and the `console.log` never runs. If the `expect` passes, `isCond` will almost always be `true`. The "❌" branch of the log practically never fires — it gives a false sense that the log reflects both cases.
@@ -18,7 +18,7 @@ Problem: if the `expect` fails, the test stops right there and the `console.log`
 
 ```typescript
 // src/utils/logger.ts
-import { expect, Locator } from '@playwright/test';
+import { expect, Locator, APIResponse } from '@playwright/test';
 
 export async function assertVisible(
   locator: Locator,
@@ -62,27 +62,43 @@ export async function assertText(
     throw err;
   }
 }
+
+export function assertApiOk(
+  response: APIResponse,
+  label: string,
+  module = 'API',
+): void {
+  const ok = response.ok();
+  const icon = ok ? '✅' : '❌';
+  console.log(`[${module}] ${icon} ${label} — status ${response.status()}.`);
+  expect(ok, `${label} should return a 2xx status`).toBeTruthy();
+}
+
+export function logApiResponse(body: unknown, label: string, module = 'API'): void {
+  console.log(`[${module}] ${label}:\n${JSON.stringify(body, null, 2)}`);
+}
 ```
 
 ## Rules
 
 - **Single source of truth**: the `expect` decides pass/fail; the log only reflects that real outcome via `try/catch`, so it can never "lie" by showing ✅ when it actually failed (or vice versa).
 - **Always re-throw the error** (`throw err`) inside the `catch` — the helper's purpose is to enrich the log, not swallow the failure.
-- **`module` identifies the log's origin** (the Page Object or feature name, e.g. `'ClaimsSearch'`), so logs from a long run are traceable.
-- **Combine with steps**: the user always wants log + steps. Wrap calls to these helpers inside a method decorated with `@logStep(...)` (see `decorators.md`) so that, besides the console line, the assertion also shows up as a named step in the HTML/Allure report.
+- **`module` identifies the log's origin** (the Page Object or feature name, e.g. `'Login'` or `'ProductsApi'`), so logs from a long run are traceable.
+- **Combine with steps**: the user always wants log + steps. Wrap calls to these helpers inside a method decorated with `@logStep(...)` (see [decorator.md](decorator.md)) so that, besides the console line, the assertion also shows up as a named step in the HTML report.
 - Extend this file with more variants (`assertEnabled`, `assertCount`, etc.) following the same try/log/throw pattern — don't duplicate the verification logic.
+- `logApiResponse` is for inspection of bodies, not a pass/fail assertion.
 
 ## Usage in a Page Object
 
 ```typescript
-@logStep('Verify claim row is visible')
-async expectClaimVisible(claimNumber: string): Promise<void> {
+@logStep('Verify inventory heading is visible')
+async expectLoggedIn(): Promise<void> {
   await assertVisible(
-    this.claimRow(claimNumber),
-    `Claim row with number ${claimNumber}`,
-    'ClaimsSearch',
+    this.page.getByText('Products'),
+    'Products heading after login',
+    'Login',
   );
 }
 ```
 
-Result: a "Verify claim row is visible" step in the report, and in the console a line like `[ClaimsSearch] ✅ Claim row with number 12345 is visible.` or its ❌ equivalent on failure — always reflecting the real outcome.
+Result: a "Verify inventory heading is visible" step in the report, and in the console a line like `[Login] ✅ Products heading after login is visible.` or its ❌ equivalent on failure — always reflecting the real outcome.

@@ -4,17 +4,19 @@ The user doesn't have a pipeline yet, so **don't generate a CI workflow unless e
 
 ## What should be ready from day 1
 
-- **Everything configurable via environment variable**: `BASE_URL`, `API_BASE_URL`, credentials, `TEST_ENV`. No environment value hardcoded in `playwright.config.ts` or in Page Objects (see `environment-config.md`).
-- **`retries` conditioned on `process.env.CI`**: see `error-handling.md` — already handled if that reference was followed.
-- **Reports exportable as artifacts**: `reports/html` and `reports/allure-results` are plain folders, easy to upload as an artifact in any CI without extra steps.
-- **Adjustable `workers`**: let Playwright auto-detect locally, but allow an environment-variable override if the CI runner has limited resources:
+- **Secrets via environment variable**: `TEST_USER_EMAIL`, `TEST_USER_PASSWORD`, `TEST_ENV`. URLs live in `src/config/environments.ts`; do not hardcode credentials in Page Objects (see [environment-config.md](environment-config.md)).
+- **`retries` conditioned on `process.env.CI`**: see [error-handling.md](error-handling.md) — already handled in `playwright.config.ts`.
+- **Reports exportable as artifacts**: default HTML output is `playwright-report/` (gitignored).
+- **Adjustable `workers`**: this repo uses `workers: process.env.CI ? 1 : undefined`.
 
 ```typescript
 // playwright.config.ts
 export default defineConfig({
-  workers: process.env.CI ? 2 : undefined,
+  workers: process.env.CI ? 1 : undefined,
 });
 ```
+
+Projects already split UI vs API (`ui-chromium` / `api`). CI can run all projects or a subset with `--project`.
 
 ## Reference example (do NOT generate unless explicitly requested)
 
@@ -28,8 +30,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       CI: true
-      BASE_URL: ${{ secrets.BASE_URL }}
-      API_BASE_URL: ${{ secrets.API_BASE_URL }}
+      TEST_ENV: qa
       TEST_USER_EMAIL: ${{ secrets.TEST_USER_EMAIL }}
       TEST_USER_PASSWORD: ${{ secrets.TEST_USER_PASSWORD }}
     steps:
@@ -44,10 +45,10 @@ jobs:
         if: always()
         with:
           name: playwright-report
-          path: reports/html
+          path: playwright-report
           retention-days: 14
 ```
 
 Notes if the user asks to enable this later:
-- If they use Allure in CI, add a `npx allure generate` step **only if the runner has Java** (setup-java action) — otherwise, only upload `allure-results` as an artifact and generate the visual report outside the pipeline.
+- If they use Allure in CI, add a `npx allure generate` step **only if the runner has Java** (setup-java action) — otherwise only upload results as an artifact.
 - Adjust `retention-days` and the trigger (`on:`) to the team's actual policies, don't assume.

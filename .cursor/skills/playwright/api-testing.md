@@ -2,6 +2,8 @@
 
 Use Playwright's native `request` context, wrapped in an "API objects" layer equivalent to Page Objects — this way API tests have the same structure and readability as UI tests, and never call `request.get(...)` directly inside the `.spec.ts` file.
 
+`BaseApiClient.baseUrl` is `env.apiBaseUrl`, which may be a **different origin** from the UI `baseUrl`.
+
 ## BaseApiClient
 
 ```typescript
@@ -18,89 +20,87 @@ export abstract class BaseApiClient {
 }
 ```
 
-## Concrete API client
+## Concrete API client (demo: product catalog)
 
 ```typescript
-// src/api/claims/claims.api.ts
+// src/api/products/products.api.ts
 import { APIRequestContext, APIResponse } from '@playwright/test';
 import { BaseApiClient } from '../base/base.api';
 import { logStep } from '../../utils/decorators';
 
-export interface CreateClaimPayload {
-  claimNumber: string;
-  amount: number;
+export interface ProductCategory {
+  usertype: { usertype: string };
+  category: string;
 }
 
-export class ClaimsApi extends BaseApiClient {
+export interface Product {
+  id: number;
+  name: string;
+  price: string;
+  brand: string;
+  category: ProductCategory;
+}
+
+export interface ProductsListResponse {
+  responseCode: number;
+  products: Product[];
+}
+
+export class ProductsApi extends BaseApiClient {
   constructor(request: APIRequestContext) {
     super(request);
   }
 
-  @logStep('Create claim via API')
-  async createClaim(payload: CreateClaimPayload): Promise<APIResponse> {
-    return this.request.post(`${this.baseUrl}/claims`, { data: payload });
-  }
-
-  @logStep('Get claim by number via API')
-  async getClaim(claimNumber: string): Promise<APIResponse> {
-    return this.request.get(`${this.baseUrl}/claims/${claimNumber}`);
+  @logStep('Get all products via API')
+  async getProductsList(): Promise<APIResponse> {
+    const origin = this.baseUrl.replace(/\/$/, '');
+    return this.request.get(`${origin}/api/productsList`);
   }
 }
 ```
+
+Strip a trailing slash on `baseUrl` before concatenating paths so `https://host/` + `/api/...` does not produce a double slash.
 
 ## API test
 
 ```typescript
-// tests/api/claims/claims-crud.spec.ts
+// tests/api/products/products-list.spec.ts
 import { test, expect } from '../../../src/fixtures/test-fixtures';
+import { assertApiOk, logApiResponse } from '../../../src/utils/logger';
+import type { ProductsListResponse } from '../../../src/api/products/products.api';
 
-test('creates a claim and retrieves it @smoke', async ({ claimsApi }) => {
-  const createResponse = await claimsApi.createClaim({
-    claimNumber: 'CLM-000999',
-    amount: 1500,
+test.describe('Products - API', () => {
+  test('returns the product catalog @smoke', async ({ productsApi }) => {
+    const response = await productsApi.getProductsList();
+    assertApiOk(response, 'Get products list', 'ProductsApi');
+
+    const body = (await response.json()) as ProductsListResponse;
+    logApiResponse(body, 'Get products list body', 'ProductsApi');
+
+    expect(body.responseCode, 'API responseCode should be 200').toBe(200);
+    expect(body.products.length, 'Catalog should include at least one product').toBeGreaterThan(0);
   });
-  expect(createResponse.ok(), 'Create claim should return 2xx').toBeTruthy();
-
-  const getResponse = await claimsApi.getClaim('CLM-000999');
-  expect(getResponse.ok(), 'Get claim should return 2xx').toBeTruthy();
-
-  const body = await getResponse.json();
-  expect(body.claimNumber).toBe('CLM-000999');
 });
 ```
 
-## Assertions for API responses using the same logging standard
+## Assertions for API responses
 
-For status codes or body fields, use a variant of the `assertions-logging.md` helper adapted for responses (instead of locators):
+Use `assertApiOk` from `src/utils/logger.ts` (see [assertions-logging.md](assertions-logging.md)). Status is already a fixed value when the helper runs, so the log can happen before `expect` — unlike `toBeVisible`, which auto-retries.
 
-```typescript
-// src/utils/logger.ts (add this)
-import { APIResponse } from '@playwright/test';
-
-export function assertApiOk(
-  response: APIResponse,
-  label: string,
-  module = 'API',
-): void {
-  const ok = response.ok();
-  const icon = ok ? '✅' : '❌';
-  console.log(`[${module}] ${icon} ${label} — status ${response.status()}.`);
-  expect(ok, `${label} should return a 2xx status`).toBeTruthy();
-}
-```
-
-Note: here the `expect` comes *after* the log because there's no async operation to retry (unlike `toBeVisible`, which has auto-retry) — the status is already a fixed value by the time this is called.
+Some public APIs return HTTP 200 with a payload `responseCode`. Assert **both** when the contract requires it.
 
 ## Combining UI + API in a single test
 
-Useful for fast data setup (create via API, verify in UI):
+Useful for fast data setup (create via API, verify in UI) **when both layers talk to the same product**. In this demo framework they do not (SauceDemo vs Automation Exercise), so do not invent a mixed test that pretends they share data. When a real project shares a backend:
 
 ```typescript
-test('claim created via API shows up in UI search', async ({ claimsApi, claimsSearchPage }) => {
-  await claimsApi.createClaim({ claimNumber: 'CLM-000777', amount: 300 });
+test('item created via API shows up after login', async ({ productsApi, loginPage }) => {
+  await productsApi.getProductsList();
 
-  await claimsSearchPage.goto();
-  await claimsSearchPage.searchByClaimNumber('CLM-000777');
-  await claimsSearchPage.expectClaimVisible('CLM-000777');
+  await loginPage.goto();
+  await loginPage.login('standard_user', 'secret_sauce');
+  await loginPage.expectLoggedIn();
 });
 ```
+
+Only write that shape when the URLs and domain actually connect.

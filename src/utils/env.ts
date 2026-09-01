@@ -1,6 +1,4 @@
-import dotenv from 'dotenv';
-
-dotenv.config();
+import { activeEnvironment } from '../config/environments';
 
 function required(name: string): string {
   const value = process.env[name];
@@ -10,10 +8,10 @@ function required(name: string): string {
 
 export const env = {
   get baseUrl(): string {
-    return required('BASE_URL');
+    return activeEnvironment.baseUrl;
   },
   get apiBaseUrl(): string {
-    return required('API_BASE_URL');
+    return activeEnvironment.apiBaseUrl;
   },
   get testUser(): { email: string; password: string } {
     return {

@@ -35,7 +35,12 @@ export default defineConfig({
     {
       name: 'ui-chromium',
       testDir: './tests/ui',
-      use: { ...devices['Desktop Chrome'] },
+      use: { 
+        ...devices['Desktop Chrome'],
+        launchOptions: {
+          args: ['--disable-features=PasswordLeakDetection,PasswordManagerOnboarding'],
+        },
+      },
     },
     {
       name: 'api',

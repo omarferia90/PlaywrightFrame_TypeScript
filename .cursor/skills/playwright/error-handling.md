@@ -8,16 +8,18 @@ No configuration needed: `expect(locator).toBeVisible()`, `.click()`, etc. alrea
 
 ## 2. Test-level retries (global config)
 
-```typescript
-// playwright.config.ts
-import { defineConfig } from '@playwright/test';
+Match `playwright.config.ts` in this repo unless the user asks to change it:
 
+```typescript
+// playwright.config.ts (relevant excerpt)
 export default defineConfig({
-  retries: process.env.CI ? 2 : 0, // more aggressive in CI, 0 locally so real flakiness isn't hidden during development
-  timeout: 30_000,
+  retries: process.env.CI ? 1 : 0,
+  timeout: 60_000,
   expect: { timeout: 10_000 },
   use: {
-    trace: 'retain-on-failure',
+    actionTimeout: 15_000,
+    navigationTimeout: 30_000,
+    trace: 'on-first-retry',
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',
   },
@@ -25,21 +27,22 @@ export default defineConfig({
 ```
 
 - **`retries: 0` locally**: during development, a failing test should fail on the first try so real flakiness isn't hidden while writing tests.
-- **`retries: 2` in CI**: tolerates infrastructure flakiness (network, containers) without blocking the pipeline for failures unrelated to the code under test.
+- **`retries: 1` in CI** (this repo): tolerates a single infrastructure flake without hiding systematic failures. Increase only if the user asks.
+- **`timeout: 60_000`**: whole test including hooks.
 
 ## 3. `@retry` at the method level (targeted)
 
-For a specific action known to be unstable, not the whole test. See `decorators.md`.
+For a specific action known to be unstable, not the whole test. See [decorator.md](decorator.md).
 
 ## 4. Failure evidence: screenshot, video, trace
 
-Already configured above with `screenshot: 'only-on-failure'`, `video: 'retain-on-failure'`, `trace: 'retain-on-failure'`. This:
-- Saves screenshot and video **only** on failure (doesn't fill up disk with evidence from passing tests).
-- Saves the trace (an interactive timeline with DOM, network, console) so failures can be inspected with `npx playwright show-trace`.
+Already configured above. This:
+- Saves screenshot and video **only on failure** (doesn't fill up disk with evidence from passing tests).
+- Saves the trace **on first retry** (`on-first-retry`) so local first-fail runs stay light; inspect with `npx playwright show-trace`.
 
 ## 5. Custom logging at the point of failure
 
-The `assertVisible`/`assertApiOk` helpers (see `assertions-logging.md` and `api-testing.md`) already log with ❌ and re-throw the error — so the console log, the report step, and the visual evidence (screenshot/trace) all point to the same failure moment, without needing to manually correlate them.
+The `assertVisible`/`assertApiOk` helpers (see [assertions-logging.md](assertions-logging.md) and [api-testing.md](api-testing.md)) already log with ❌ and re-throw the error — so the console log, the report step, and the visual evidence (screenshot/trace) all point to the same failure moment.
 
 ## Attaching a targeted screenshot inside the helper (optional)
 
@@ -57,11 +60,11 @@ export async function assertVisible(
   } catch (err) {
     console.log(`[${module}] ❌ ${label} was not found.`);
     await locator.page().screenshot({
-      path: `reports/failures/${module}-${Date.now()}.png`,
+      path: `test-results/failures/${module}-${Date.now()}.png`,
     });
     throw err;
   }
 }
 ```
 
-Use sparingly: if `screenshot: 'only-on-failure'` is already in the global config, this is redundant unless you specifically want a searchable, module-scoped filename.
+Use sparingly: if `screenshot: 'only-on-failure'` is already in the global config, this is redundant unless you specifically want a searchable, module-scoped filename. Do not add this unless the user asks.

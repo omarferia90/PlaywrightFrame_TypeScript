@@ -1,16 +1,14 @@
 import { test as base, type TestInfo } from '@playwright/test';
-import { ClaimsSearchPage } from '../pages/claim/claims-search.page';
-import { ClaimsApi } from '../api/claims/claims.api';
 import { LoginPage } from '../pages/login/login.page';
+import { ProductsApi } from '../api/products/products.api';
 
 
 
 type Fixtures = {
   tearDown: void;
   testInfo: TestInfo;
-  claimsSearchPage: ClaimsSearchPage;
-  claimsApi: ClaimsApi;
   loginPage: LoginPage;
+  productsApi: ProductsApi;
 };
 
 export const test = base.extend<Fixtures>({
@@ -37,15 +35,12 @@ export const test = base.extend<Fixtures>({
   ],
   testInfo: [async({}, use, testInfo) => {
     await use(testInfo);
-}, { auto: true }],
-  claimsSearchPage: async ({ page }, use) => {
-    await use(new ClaimsSearchPage(page));
-  },
-  claimsApi: async ({ request }, use) => {
-    await use(new ClaimsApi(request));
-  },
+  }, { auto: true }],
   loginPage: async ({ page }, use) => {
     await use(new LoginPage(page));
+  },
+  productsApi: async ({ request }, use) => {
+    await use(new ProductsApi(request));
   },
 });
 

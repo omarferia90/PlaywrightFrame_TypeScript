@@ -4,8 +4,6 @@ import { lockedOutUser} from '../../../src/fixtures/data/login.data';
 import { problemUser} from '../../../src/fixtures/data/login.data';
 
 
-
-
 test.describe('Login - UI', () => {
     
     test('login with valid user', async ({ loginPage }) => {
