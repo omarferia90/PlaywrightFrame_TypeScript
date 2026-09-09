@@ -1,6 +1,7 @@
 import { Page, Locator } from '@playwright/test';
 import { BasePage } from '../base/base.page';
 import { assertVisible } from '../../utils/logger';
+import { validation } from '../../utils/assertions';
 import { logStep } from '../../utils/decorators';
 
 export class LoginPage extends BasePage {
@@ -34,11 +35,12 @@ export class LoginPage extends BasePage {
   @logStep('Navigate to login page')
   async navigateToLoginPage(): Promise<void> {
     await this.page.goto(this.url);
+    await this.waitForReady();
   }
 
   @logStep('Fill username')
   async fillUsername(username: string): Promise<void> {
-    await assertVisible(this.usernameInput, `Username Field`, 'Login',);
+    await validation.ui.assertVisible(this.usernameInput, `Username Field`, 'Login');
     await this.usernameInput.fill(username);
   }
 
