@@ -1,8 +1,8 @@
 import { Page, Locator } from '@playwright/test';
 import { BasePage } from '../base/base.page';
-import { assertVisible } from '../../utils/logger';
-import { validation } from '../../utils/assertions';
 import { logStep } from '../../utils/decorators';
+import { validation } from '../../utils/assertions';
+
 
 export class LoginPage extends BasePage {
   readonly url = '/';
@@ -46,24 +46,24 @@ export class LoginPage extends BasePage {
 
   @logStep('Fill password')
   async fillPassword(password: string): Promise<void> {
-    await assertVisible(this.passwordInput, `Password Field`, 'Login',);
+    await validation.ui.assertVisible(this.passwordInput, `Password Field`, 'Login',);
     await this.passwordInput.fill(password);
   }
 
   @logStep('Click login button')
   async clickLoginButton(): Promise<void> {
-    await assertVisible(this.loginButton, `Login Button`, 'Login',);
+    await validation.ui.assertVisible(this.loginButton, `Login Button`, 'Login',);
     await this.loginButton.click();
   }
 
   @logStep('Verify login successful')
   async verifyLoginSuccessful(): Promise<void> {
-    await assertVisible(this.inventoryWidget, `Inventory Widget`, 'Login',);
+    await validation.ui.assertVisible(this.inventoryWidget, `Inventory Widget`, 'Login',);
   }
 
   @logStep('Verify error message')
   async verifyErrorMessage(errorMessage: string): Promise<void> {
-    await assertVisible(this.headerError(errorMessage), `Error: `, 'Login',);
+    await validation.ui.assertVisible(this.headerError(errorMessage), `Error: `, 'Login',);
   }
 
   @logStep('Login with username and password')
